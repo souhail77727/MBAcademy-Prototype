@@ -194,14 +194,46 @@ img{max-width:100%;display:block;}
 .user-details span{font-size:0.7rem;color:var(--gold-deep);font-weight:600;}
 
 /* =========================================================
-   VIEWS
+   VIEWS — FIXED SMOOTH SCROLLING
    ========================================================= */
-.view{
-  display:none;flex:1;overflow-y:auto;padding:34px 40px 60px;
-  animation:viewIn 0.45s var(--ease);
+#viewport{
+  position:relative;
+  flex:1;
+  overflow:hidden;
 }
-.view.active{display:block;}
-@keyframes viewIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+
+.view{
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  bottom:0;
+  overflow-y:auto;
+  padding:34px 40px 60px;
+  opacity:0;
+  transform:translateY(40px);
+  pointer-events:none;
+  transition:opacity 0.5s var(--ease), transform 0.5s var(--ease);
+  will-change:transform, opacity;
+  -webkit-overflow-scrolling:touch;
+  scroll-behavior:smooth;
+}
+
+.view.active{
+  opacity:1;
+  transform:translateY(0);
+  pointer-events:auto;
+}
+
+.view.exit-up{
+  opacity:0;
+  transform:translateY(-40px);
+}
+
+.view.exit-down{
+  opacity:0;
+  transform:translateY(40px);
+}
 
 .page-head{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:16px;margin-bottom:28px;}
 .page-head h1{font-size:1.9rem;}
@@ -1188,18 +1220,52 @@ document.addEventListener('DOMContentLoaded', () => {
   const navItems = document.querySelectorAll('.nav-item[data-view]');
   const views = document.querySelectorAll('.view');
   const sidebar = document.getElementById('sidebar');
+  let currentView = 'dashboard';
 
   function goToView(name){
-    views.forEach(v => v.classList.toggle('active', v.dataset.viewContent === name));
-    navItems.forEach(n => n.classList.toggle('active', n.dataset.view === name));
-    document.getElementById('viewport').scrollTop = 0;
-    if (window.innerWidth <= 900) sidebar.classList.remove('open');
-    if (name === 'analytics') requestAnimationFrame(initCharts);
+    if(name === currentView) return;
+    
+    const oldView = document.querySelector(`.view[data-view-content="${currentView}"]`);
+    const newView = document.querySelector(`.view[data-view-content="${name}"]`);
+    
+    if(!oldView || !newView) return;
+    
+    // Determine direction based on nav index
+    const oldIndex = Array.from(navItems).findIndex(n => n.dataset.view === currentView);
+    const newIndex = Array.from(navItems).findIndex(n => n.dataset.view === name);
+    const direction = newIndex > oldIndex ? 'exit-up' : 'exit-down';
+    
+    // Remove active from all views first
+    views.forEach(v => v.classList.remove('active', 'exit-up', 'exit-down'));
+    
+    // Add exit animation to old view
+    oldView.classList.add(direction);
+    
+    // After exit animation, switch
+    setTimeout(() => {
+      oldView.classList.remove(direction);
+      newView.classList.add('active');
+      
+      // Scroll new view to top
+      newView.scrollTop = 0;
+      
+      // Update nav
+      navItems.forEach(n => n.classList.toggle('active', n.dataset.view === name));
+      
+      // Close mobile sidebar
+      if (window.innerWidth <= 900) sidebar.classList.remove('open');
+      
+      // Init charts if needed
+      if (name === 'analytics') requestAnimationFrame(initCharts);
+      
+      currentView = name;
+    }, 300);
   }
+  
   MBA.goToView = goToView;
   MBA.openPlayer = () => goToView('player');
 
-  // Any element with data-view navigates, without needing to be a full nav item
+  // Any element with data-view navigates
   document.querySelectorAll('[data-view]').forEach(el => {
     el.addEventListener('click', (e) => {
       e.preventDefault();
@@ -1231,7 +1297,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // AI tutor: suggestion chips populate input; enter sends a canned reply
+  // AI tutor
   const tutorInput = document.querySelector('.tutor-input-bar input');
   const tutorMessages = document.getElementById('tutorMessages');
   document.querySelectorAll('.suggest-chip').forEach(chip => {
